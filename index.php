@@ -33,14 +33,14 @@
                 define('CONST_STRING', 'const3_string');
                 define('CONST_BOOL', false);
 
-                $v_arr = ['integer' => $v_int,
+                $v_arr = array('integer' => $v_int,
                           'float' => $v_float,
                           'string' => $v_string,
                           'boolean' => $v_bool,
                           'const integer' => CONST_INT,
                           'const float' => CONST_FLOAT,
                           'const string' => CONST_STRING,
-                          'const boolean' => CONST_BOOL];
+                          'const boolean' => CONST_BOOL);
 
                 foreach ($v_arr as $key => $value) {
                     echo "<tr><td>" . $key . "</td><td>" . $value . "</td><td>";
@@ -168,7 +168,7 @@
     <code>
         Логический оператор XOR (исключающее или) возвращает true, если один из операндов равен true.<br>
         В противном случае возвращает false. Удобно использовать для превращения значения булевой <br>
-        переменной в противоположное или изменения значения определенного бита на противоположное.
+        переменной в противоположное.
     </code>
     <table>
         <thead>
@@ -196,9 +196,9 @@
          </tbody>
     </table>
     <code>
-        Для любых значений $a, результат $a xor $a будет равен false в булевом выражении (или 0<br>
-        в выражении с числами, или пустой строке в выражениях со строками) поскольку все биты обоих <br>
-        операндов одинаковы.
+        Для любых значений $a, результат $a xor $a будет равен false в булевом выражении<br>
+        поскольку оба операнда будут приведены к одинаковым булевым значениям, а результат <br>
+        xor для одинаковых операндов равен false.
     </code>
     <br><br>
 
