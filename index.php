@@ -1,206 +1,143 @@
+<?php
+// Запуск сессии, проверка ошибок и логов удачных добавлений
+session_start();
+$errors = !empty($_SESSION['errors']) ? $_SESSION['errors'] : [];
+unset($_SESSION['errors']);
+$logs = !empty($_SESSION['logs']) ? $_SESSION['logs'] : [];
+unset($_SESSION['logs']);
+// Переменные путей к папке с картинками, абсолютный и относительно сервера
+$imgPath = __DIR__ . '/img/';
+if (!file_exists($imgPath)) {
+    echo "<h2>Critical error - can't read from gallery path!</h2>";
+    exit;
+}
+$serverImgPath = '/img/';
+// Массив расшифровок сообщений об ошибках
+$fileUploadErrors = [
+    1 => 'Загружаемый файл превысил размер, допустимый настройками PHP',
+    2 => 'Загружаемый файл превысил размер, допустимый директивой формы HTML',
+    3 => 'Загружаемый файл не был полностью загружен',
+    4 => 'Нет файла для загрузки',
+    6 => 'Временная папка для загрузки недоступна',
+    7 => 'Ошибка при записи файла на диск',
+    8 => 'Одно из расширений PHP остановило загрузку файла',
+];
+// Допустимые расширения файлов для галереи
+$allowedExtensions = ['jpg', 'jpeg', 'gif', 'png'];
+// Функция для получения расширения файла
+function getFileExt($file)
+{
+    return pathinfo($file, PATHINFO_EXTENSION);
+}
+
+// Функция для получения имени файла
+function getFileName($file)
+{
+    return pathinfo($file, PATHINFO_FILENAME);
+}
+
+// Функция проверки имени файла. Изменяет целевое имя, если такое уже есть.
+function checkFileName($file)
+{
+    if (file_exists($file)) {
+        $_SESSION['logs'][] = "Такой файл уже есть:" . basename($file);
+        $add = 0;
+        $path = dirname(realpath($file)) . '/';
+        $fileName = getFileName($file);
+        $fileExt = getFileExt($file);
+        do {
+            $file = $path . $fileName . '_' . (++$add) . '.' . $fileExt;
+        } while (file_exists($file));
+    }
+    $_SESSION['logs'][] = "Скорректированное имя файла: " . basename($file);
+    return $file;
+}
+
+// Функция создает массив имен картинок по заданной директории и массиву разрешенных расширений
+function getImageNames($imgPath, $allowedExtensions)
+{
+    $workDir = scandir($imgPath);
+    $imgFiles = [];
+    foreach ($workDir as $el) {
+        if (is_file($imgPath . $el) && in_array(getFileExt($el), $allowedExtensions)) {
+            $imgFiles[] = $el;
+        }
+    }
+    return $imgFiles;
+}
+
+// Обработка массива $_FILES при запросе добавления файлов через форму
+if (isset($_POST['upload_form'])) {
+    $files = $_FILES['upload'];
+    foreach ($files['error'] as $key => $error) {
+        $fileName = $files['name'][$key];
+        $fileTmpName = $files['tmp_name'][$key];
+        if (is_uploaded_file($fileTmpName) && (UPLOAD_ERR_OK == $error)) {
+            $newFile = $imgPath . basename($fileName);
+            if (in_array(getFileExt($newFile), $allowedExtensions)) {
+                $newFile = checkFileName($newFile);
+                if (move_uploaded_file($fileTmpName, $newFile)) {
+                    $_SESSION['logs'][] = "Файл " . basename($newFile) . " загружен в галерею";
+                } else {
+                    $_SESSION['errors'][] = "Файл " . basename($newFile) . " загрузить в галерею не удалось";
+                }
+            } else {
+                $_SESSION['errors'][] = "Формат файла " . basename($newFile) . " не подходит для загрузки";
+            }
+        } else {
+            $fileError = isset($fileUploadErrors[$error]) ? $fileUploadErrors[$error] : "Загрузить не удалось по неизвестной причине";
+            $_SESSION['errors'][] = 'Ошибка при загрузке файла ' . $fileName . ': ' . $fileError;
+        }
+    }
+    header('location: /index.php');
+}
+?>
 <!DOCTYPE html>
 <html>
 <head lang="en">
     <meta charset="UTF-8">
     <title></title>
-    <style>
-        body {
-            font-size: 12px;
-        }
-        td {
-            border: 1px solid black;
-        }
-    </style>
+    <link rel="stylesheet" href="/css/main.css">
 </head>
 <body>
-    <h3>Задание 1 (переменные разных типов)</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Тип</th>
-                <th>Значение</th>
-                <th>var_dump()</th>
-            </tr>
-        </thead>
-        <tbody>
-            <?php
-                $v_int = 7;
-                $v_float = 7.77;
-                $v_string = '7string_value';
-                $v_bool = true;
-                define('CONST_INT', 3);
-                define('CONST_FLOAT', 3.33);
-                define('CONST_STRING', 'const3_string');
-                define('CONST_BOOL', false);
+<h3>Вы можете добавить свое изображение</h3>
 
-                $v_arr = array('integer' => $v_int,
-                          'float' => $v_float,
-                          'string' => $v_string,
-                          'boolean' => $v_bool,
-                          'const integer' => CONST_INT,
-                          'const float' => CONST_FLOAT,
-                          'const string' => CONST_STRING,
-                          'const boolean' => CONST_BOOL);
+<form action="/index.php" method="post" enctype="multipart/form-data">
+    <label for="file">Имя файла для загрузки:</label>
+    <input id="file" type="file" name="upload[]" multiple><br><br>
+    <input type="submit" name="upload_form" value="Загрузить файл в галлерею">
+</form>
 
-                foreach ($v_arr as $key => $value) {
-                    echo "<tr><td>" . $key . "</td><td>" . $value . "</td><td>";
-                    var_dump($value);
-                    echo "</td></tr>";
-                }
-            ?>
-        </tbody>
-    </table>
+<?php
+if (!empty($errors)) {
+    // Вывод найденных ошибок.
+    echo "<p class=\"error\">Сообщения об ошибках:</p>";
+    foreach ($errors as $e) {
+        echo "<p class=\"error\"> - " . $e . "</p>";
+    }
+}
+if (!empty($logs)) {
+    // Вывод логов.
+    echo "<p class=\"log\">Сообщения о выполненных операциях:</p>";
+    foreach ($logs as $l) {
+        echo "<p class=\"log\"> - " . $l . "</p>";
+    }
+}
+?>
 
-    <h3>Задание 2 (вывод в двойных кавычках)</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Тип</th>
-                <th>Значение</th>
-                <th>var_dump()</th>
-            </tr>
-            </thead>
-        <tbody>
-            <?php
-                foreach ($v_arr as $key => $value) {
-                    echo "<tr><td>" . $key . "</td><td>" . "$value" . "</td><td>";
-                    var_dump("$value");
-                    echo "</td></tr>";
-                }
-            ?>
-        </tbody>
-    </table>
-    <code>
-        Отличий от первого задания нет, так как переменные в строках,
-        указанных в двойных кавычках обрабатываются. В результате выводится
-        их содержимое, приведенное к типу string.
-    </code>
+<h1>Галерея изображений</h1>
+<?php
 
-    <h3>Задание 3 (вывод в одинарных кавычках)</h3>
-    <table>
-        <thead>
-        <tr>
-            <th>Тип</th>
-            <th>Значение</th>
-            <th>var_dump()</th>
-        </tr>
-        </thead>
-        <tbody>
-            <?php
-                foreach ($v_arr as $key => $value) {
-                    echo "<tr><td>" . $key . "</td><td>" . '$value' . "</td><td>";
-                    var_dump('$value');
-                    echo "</td></tr>";
-                }
-            ?>
-        </tbody>
-    </table>
-    <code>
-        В данном случае переменные не обрабатываются и выводится не содержимое
-        переменной, а текст, как он был указан между одинарными кавычками.
-    </code>
+foreach (getImageNames($imgPath, $allowedExtensions) as $img) {
+    ?>
+    <div class="gallery_img">
+        <img src="<?php echo $serverImgPath . $img; ?>" title="<?php echo basename($img); ?>">
+    </div>
+<?php
+}
 
-    <h3>Задание 4 (выражения с использованием разных типов данных)</h3>
-    <table>
-        <thead>
-        <tr>
-            <th>Выражение</th>
-            <th>Значение</th>
-            <th>var_dump()</th>
-        </tr>
-        </thead>
-        <tbody>
-            <?php
-                echo "<tr><td>int(7) + float(7.77)</td><td>" . ($v_int + $v_float) . "</td><td>";
-                var_dump($v_int + $v_float);
-                echo "</td></tr>";
-             ?>
-            <tr>
-                <td colspan="3">
-                    <code>
-                        В любой операции с целыми числами, при появлении числа с плавающей запятой,<br>
-                        результат будет числом с плавающей запятой.
-                    </code>
-                </td>
-            </tr>
-            <?php
-                echo "<tr><td>string(\"7string_value\") + int(7)</td><td>" . ($v_string + $v_int) . "</td><td>";
-                    var_dump($v_string + $v_int);
-                echo "</td></tr>";
-            ?>
-            <?php
-                echo "<tr><td>float(7.77) * CONST_STRING(\"const3_string\")</td><td>" . ($v_float * CONST_STRING) . "</td><td>";
-                    var_dump($v_float * CONST_STRING);
-                echo "</td></tr>";
-            ?>
-            <tr>
-                <td colspan="3">
-                    <code>
-                        В любой арифметической операции с числами и строками, будет выполнена попытка<br>
-                        привести начальную часть строки к числу. При неудаче вместо строки будет использован 0.
-                    </code>
-                </td>
-            </tr>
-            <?php
-                echo "<tr><td>float(7.77) + boolean(true)</td><td>" . ($v_float + $v_bool) . "</td><td>";
-                    var_dump($v_float + $v_bool);
-                echo "</td></tr>";
-            ?>
-            <?php
-                echo "<tr><td>int(7) * CONST_BOOL(false)</td><td>" . ($v_int * CONST_BOOL) . "</td><td>";
-                    var_dump($v_int * CONST_BOOL);
-                echo "</td></tr>";
-            ?>
-            <tr>
-                <td colspan="3">
-                    <code>
-                        В любой арифметической операции булевы переменные приводятся к числу 0, если они равны:<br>
-                        bool false, числу 0, пустой строке и строке "0" и некоторым другим значениям.<br>
-                        В остальных случаях интерпретируются как число 1.
-                    </code>
-                </td>
-            </tr>
-
-        </tbody>
-    </table>
-
-    <h3>Задание 5 (оператор XOR)</h3>
-    <code>
-        Логический оператор XOR (исключающее или) возвращает true, если один из операндов равен true.<br>
-        В противном случае возвращает false. Удобно использовать для превращения значения булевой <br>
-        переменной в противоположное.
-    </code>
-    <table>
-        <thead>
-            <tr>
-                <th>a</th>
-                <th>b</th>
-                <th>xor</th>
-            </tr>
-        </thead>
-        <tbody>
-        <?php
-            echo "<tr><td>true</td><td>true</td><td>";
-            var_dump(true xor true);
-            echo "</td></tr>";
-            echo "<tr><td>true</td><td>false</td><td>";
-            var_dump(true xor false);
-            echo "</td></tr>";
-            echo "<tr><td>false</td><td>true</td><td>";
-            var_dump(false xor true);
-            echo "</td></tr>";
-            echo "<tr><td>false</td><td>false</td><td>";
-            var_dump(false xor false);
-            echo "</td></tr>";
-        ?>
-         </tbody>
-    </table>
-    <code>
-        Для любых значений $a, результат $a xor $a будет равен false в булевом выражении<br>
-        поскольку оба операнда будут приведены к одинаковым булевым значениям, а результат <br>
-        xor для одинаковых операндов равен false.
-    </code>
-    <br><br>
+echo empty(getImageNames($imgPath, $allowedExtensions)) ? "<h2>Изображений пока нет</h2>" : '';
+?>
 
 </body>
 </html>
